@@ -325,16 +325,29 @@ export function parseUjiSaring(v, bulan, peringatan) {
 export function parsePemusnahan(v, bulan, peringatan) {
   const baris = [];
   let mulai = false, grup = '', jumlahSheet = null;
+
+  // Cek apakah data langsung mulai tanpa banner "Penyebab Darah" (kasus gviz)
+  for (let i = 0; i < Math.min(v.length, 5); i++) {
+    const b = teks(v[i][1]);
+    if (/^Penyebab Darah/i.test(b) || /^Pengambilan Darah/i.test(b) || b.startsWith('-')) {
+      mulai = true;
+      break;
+    }
+  }
+
   for (let i = 0; i < v.length; i++) {
     const b = teks(v[i][1]);
-    if (!mulai) { if (/^Penyebab Darah/i.test(b)) mulai = true; continue; }
+    if (!mulai) {
+      if (/^Penyebab Darah/i.test(b) || /^Pengambilan Darah/i.test(b)) mulai = true;
+      continue;
+    }
     if (!b) continue;
     if (/^JUMLAH$/i.test(b)) { jumlahSheet = v[i][5]; break; }
     const nilai = v[i][5];
     if (b.charAt(0) === '-') {
       baris.push({ label: (grup ? grup + ' – ' : '') + b.replace(/^-\s*/, ''), nilai: angka(nilai) });
     } else {
-      grup = b.replace(/^[a-z]\.\s*/i, '').trim();
+      grup = b.replace(/^[a-z0-9]\.\s*/i, '').replace(/^[0-9]+\.\s*/, '').trim();
       if (adaAngka(nilai)) baris.push({ label: grup, nilai: angka(nilai) });
     }
   }
@@ -358,16 +371,17 @@ const KOMP_DEF = [
 
 export function parseKomponen(v, bulan, peringatan) {
   let awal = -1;
-  for (let i = 0; i < v.length; i++) {
+  for (let i = 0; i < Math.min(v.length, 10); i++) {
     if (/^Stok Lalu/i.test(teks(v[i][2]))) { awal = i + 2; break; }
   }
-  if (awal < 0) throw new Error('header "Stok Lalu" tidak ditemukan');
+  // Fallback untuk gviz: jika baris header tidak ada, mulai dari row 0
+  if (awal < 0) awal = 0;
 
   const hasil = KOMP_DEF.map(([id, judul, aditif]) => ({ id, judul, aditif, baris: [] }));
 
   for (let i = awal; i < v.length; i++) {
     const a = teks(v[i][0]), b = teks(v[i][1]);
-    if (/^JUMLAH$/i.test(a)) break;
+    if (/^JUMLAH$/i.test(a) || /^JUMLAH$/i.test(b)) break;
     const nama = b || (/^Lain-lain$/i.test(a) ? 'Lain-lain' : '');
     if (!nama) continue;
     KOMP_DEF.forEach(([, , , idxArr], k) => {

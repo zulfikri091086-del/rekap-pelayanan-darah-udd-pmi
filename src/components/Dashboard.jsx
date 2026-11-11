@@ -22,7 +22,7 @@ export default function Dashboard() {
   const [err, setErr] = useState('');
   const [lapIdx, setLapIdx] = useState(0);
   const [tampilanId, setTampilanId] = useState({});
-  const [sembunyi, setSembunyi] = useState(true);
+  const [sembunyi, setSembunyi] = useState(false);
   const [cari, setCari] = useState('');
   const abortRef = useRef(null);
 

@@ -13,6 +13,16 @@ export default function RekapTable({ tampilan, tahun, sembunyi, cari }) {
   });
 
   if (!rows.length) {
+    if (tampilan.baris.length > 0 && sembunyi) {
+      return (
+        <div className="state">
+          Semua baris saat ini bernilai 0 atau kosong.<br />
+          <small style={{ color: 'var(--ink-3)', marginTop: 6, display: 'inline-block' }}>
+            Hilangkan centang <strong>"Sembunyikan baris kosong"</strong> di atas untuk melihat seluruh tabel.
+          </small>
+        </div>
+      );
+    }
     return <div className="state">Tidak ada baris yang cocok.</div>;
   }
 
