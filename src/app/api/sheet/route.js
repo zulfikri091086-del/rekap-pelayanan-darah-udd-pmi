@@ -66,7 +66,7 @@ function parseGviz(text) {
     if (json.status === 'error' || !json.table) return null;
     const rows = json.table.rows || [];
     const numCols = (json.table.cols || []).length;
-    return rows.map((row) => {
+    const parsedRows = rows.map((row) => {
       const cells = row.c || [];
       return Array.from({ length: numCols }, (_, i) => {
         const cell = cells[i];
@@ -75,13 +75,25 @@ function parseGviz(text) {
         return cell.v;
       });
     });
+
+    // Jika gviz menyerap baris 0 ke dalam table.cols.label, sertakan kembali agar header terbaca
+    const colLabels = (json.table.cols || []).map((c) => (c ? c.label || '' : ''));
+    const hasMeaningfulColLabels = colLabels.some((l) => l && l.trim().length > 0 && !/^col\d+$/i.test(l));
+    if (hasMeaningfulColLabels && parsedRows.length > 0) {
+      const firstRowMatches = colLabels.every((l, i) => !l || String(parsedRows[0]?.[i] || '').trim() === l.trim());
+      if (!firstRowMatches) {
+        parsedRows.unshift(colLabels);
+      }
+    }
+
+    return parsedRows;
   } catch {
     return null;
   }
 }
 
 async function fetchTab(sheetId, tabName) {
-  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}`;
+  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/gviz/tq?tqx=out:json&headers=0&sheet=${encodeURIComponent(tabName)}`;
   try {
     const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     if (!res.ok) return null;

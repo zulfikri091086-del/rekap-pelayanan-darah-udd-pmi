@@ -112,23 +112,43 @@ label.chk input { accent-color: var(--accent); width: 15px; height: 15px; }
 .cap span { color: var(--ink-3); font-size: 12px; }
 .cap a { color: var(--accent); font-size: 12px; text-decoration: none; }
 .cap a:hover { text-decoration: underline; }
-.scroll { overflow: auto; max-height: 66vh; }
-table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 1000px; font-variant-numeric: tabular-nums; }
-th, td { padding: 9px 12px; border-bottom: 1px solid var(--line-2); text-align: right; white-space: nowrap; }
+.scroll { overflow: auto; max-height: 66vh; position: relative; scrollbar-width: thin; }
+.scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+.scroll::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 960px; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 10px; border-bottom: 1px solid var(--line-2); text-align: right; white-space: nowrap; }
+th:not(:first-child), td:not(:first-child) { min-width: 68px; }
 th { position: sticky; top: 0; z-index: 2; background: var(--head); color: var(--ink-2); font-weight: 600; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
-th:first-child, td:first-child { text-align: left; position: sticky; left: 0; z-index: 1; background: var(--surface); min-width: 280px; max-width: 420px; white-space: normal; border-right: 1px solid var(--line-2); }
-th:first-child { z-index: 3; background: var(--head); }
+
+/* Kolom sticky Uraian dengan shadow tegas saat tabel digeser */
+th:first-child, td:first-child { 
+  text-align: left; 
+  position: sticky; 
+  left: 0; 
+  z-index: 2; 
+  background: var(--surface); 
+  min-width: 185px; 
+  max-width: 260px; 
+  white-space: normal; 
+  border-right: 1px solid var(--line); 
+  box-shadow: 4px 0 10px -3px rgba(0, 0, 0, 0.18); 
+}
+th:first-child { z-index: 4; background: var(--head); }
 tbody tr:hover td { background: var(--hover); }
+tbody tr:hover td:first-child { background: var(--hover); }
+
 td.z { color: var(--ink-3); }
 td.na { color: var(--ink-3); opacity: .5; }
-td.tot, th.tot { border-left: 1px solid var(--line); background: var(--total); font-weight: 600; }
+td.tot, th.tot { border-left: 1px solid var(--line); background: var(--total); font-weight: 600; min-width: 90px; }
 th.tot { color: var(--accent-deep); }
 tbody tr:hover td.tot { background: var(--total); }
-tr.sum td { font-weight: 600; background: var(--head); border-top: 1px solid var(--line); position: sticky; bottom: 0; z-index: 1; }
+tr.sum td { font-weight: 600; background: var(--head); border-top: 1px solid var(--line); position: sticky; bottom: 0; z-index: 2; }
 tr.sum td.tot { background: var(--accent-soft); color: var(--accent-deep); }
-tr.sum td:first-child { z-index: 2; font-family: var(--serif); font-size: 16px; letter-spacing: .04em; }
-.grp { display: block; color: var(--accent); font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
-.nm { font-weight: 500; }
+tr.sum td:first-child { z-index: 3; font-family: var(--serif); font-size: 15px; letter-spacing: .04em; background: var(--head); }
+.grp { display: block; color: var(--accent); font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.nm { font-weight: 500; font-size: 13px; }
 
 /* =========== STATUS =========== */
 .state { padding: 56px 16px; text-align: center; color: var(--ink-3); }

@@ -92,7 +92,7 @@ export function parsePelayanan(v, bulan, peringatan) {
   return Object.values(T);
 }
 
-// ====================== PARSER 2: IMUNOHEMATOLOGI (UNIVERSAL SCAN) ======================
+// ====================== PARSER 2: IMUNOHEMATOLOGI ======================
 export function parseImuno(v, bulan, peringatan) {
   const T = {};
   function tambah(id, judul, label, nilai) {
@@ -100,95 +100,174 @@ export function parseImuno(v, bulan, peringatan) {
     T[id].baris.push({ label, nilai });
   }
 
-  const reHeader = /^(no\.?|nomor|uraian|keterangan|nama|jenis|pemeriksaan|parameter|kegiatan|golongan|item|deskripsi|kategori|tipe|indikator|rs\b)/i;
-  let headerRow = -1, labelCol = 0;
-  const numericCols = [];
-
-  for (let i = 0; i < Math.min(v.length, 30); i++) {
-    const r = v[i];
-    for (let c = 0; c < Math.min(r.length, 8); c++) {
-      if (reHeader.test(teks(r[c]))) {
-        if (/^(no\.?|nomor)$/i.test(teks(r[c])) && c + 1 < r.length && teks(r[c + 1])) {
-          headerRow = i; labelCol = c + 1;
-        } else { headerRow = i; labelCol = c; }
-        break;
-      }
-    }
-    if (headerRow >= 0) {
-      for (let c = labelCol + 1; c < r.length; c++) {
-        const ct = teks(r[c]);
-        if (ct && !/^(no\.?|nomor)$/i.test(ct)) numericCols.push({ idx: c, label: ct });
-      }
+  // 1. Cek apakah sheet memiliki struktur standar UDD PMI
+  let isStandardPmi = false;
+  for (let i = 0; i < Math.min(v.length, 25); i++) {
+    const rowStr = (v[i] || []).map(teks).join(' ');
+    if (/PEMERIKSAAN IMUNOHEMATOLOGI/i.test(rowStr) || /GOLONGAN DARAH DONOR/i.test(rowStr)) {
+      isStandardPmi = true;
       break;
     }
   }
 
-  if (headerRow < 0) {
+  if (isStandardPmi) {
     for (let i = 0; i < v.length; i++) {
       const r = v[i];
-      const a = teks(r[0]), b = teks(r[1]);
-      let firstNum = -1;
-      for (let c = 1; c < r.length; c++) { if (adaAngka(r[c])) { firstNum = c; break; } }
-      if ((a || b) && firstNum > 0) {
-        labelCol = a && !adaAngka(r[0]) ? 0 : (b && !adaAngka(r[1]) ? 1 : 0);
-        headerRow = i - 1;
-        const hr = headerRow >= 0 ? (v[headerRow] || []) : [];
+      const t0 = teks(r[0]);
+      const t1 = teks(r[1]);
+
+      // Seksi 1: Pemeriksaan Utama (Konfirmasi Golongan Darah, Skrining, Identifikasi, Phenotyping, Uji Silang Serasi)
+      if (/^(Konfirmasi Golongan Darah|Skrining Antibodi|Identifikasi Antibodi|Phenotyping|Uji Silang Serasi)/i.test(t1) && i <= 10) {
+        const cleanLbl = t1.replace(/\s+/g, ' ').trim();
+        const val = adaAngka(r[3]) ? angka(r[3]) : 0;
+        tambah('rekap_imuno', 'Imunohematologi – Jumlah Pemeriksaan', cleanLbl, val);
+      }
+
+      // Seksi 2: Golongan Darah Donor
+      if (/KONFIRMASI GOLONGAN DARAH DONOR/i.test(t0) || (/Konfirmasi Golongan Darah/i.test(t1) && i > 10 && i < 20)) {
+        if (/Konfirmasi Golongan Darah/i.test(t1) || (i + 3 < v.length && /Konfirmasi Golongan Darah/i.test(teks(v[i + 3]?.[1])))) {
+          const rowData = /Konfirmasi Golongan Darah/i.test(t1) ? r : v[i + 3];
+          if (rowData) {
+            tambah('imuno_donor', 'Imunohematologi – Golongan Darah Donor', 'Golongan A Positif', angka(rowData[2]));
+            tambah('imuno_donor', 'Imunohematologi – Golongan Darah Donor', 'Golongan A Negatif', angka(rowData[3]));
+            tambah('imuno_donor', 'Imunohematologi – Golongan Darah Donor', 'Golongan B Positif', angka(rowData[4]));
+            tambah('imuno_donor', 'Imunohematologi – Golongan Darah Donor', 'Golongan B Negatif', angka(rowData[5]));
+            tambah('imuno_donor', 'Imunohematologi – Golongan Darah Donor', 'Golongan AB Positif', angka(rowData[6]));
+            tambah('imuno_donor', 'Imunohematologi – Golongan Darah Donor', 'Golongan AB Negatif', angka(rowData[7]));
+            tambah('imuno_donor', 'Imunohematologi – Golongan Darah Donor', 'Golongan O Positif', angka(rowData[8]));
+            tambah('imuno_donor', 'Imunohematologi – Golongan Darah Donor', 'Golongan O Negatif', angka(rowData[9]));
+            tambah('imuno_tidak_cocok', 'Imunohematologi – Hasil Tidak Cocok Donor', 'Tidak Cocok ABO', angka(rowData[11]));
+            tambah('imuno_tidak_cocok', 'Imunohematologi – Hasil Tidak Cocok Donor', 'Tidak Cocok Rhesus', angka(rowData[12]));
+          }
+        }
+      }
+
+      // Seksi 3: Golongan Darah Pasien
+      if (/Golongan Darah Pasien/i.test(t1) && i > 20 && i < 40) {
+        tambah('imuno_pasien', 'Imunohematologi – Golongan Darah Pasien', 'Pasien – Golongan A Positif', angka(r[2]));
+        tambah('imuno_pasien', 'Imunohematologi – Golongan Darah Pasien', 'Pasien – Golongan A Negatif', angka(r[3]));
+        tambah('imuno_pasien', 'Imunohematologi – Golongan Darah Pasien', 'Pasien – Golongan B Positif', angka(r[4]));
+        tambah('imuno_pasien', 'Imunohematologi – Golongan Darah Pasien', 'Pasien – Golongan B Negatif', angka(r[5]));
+        tambah('imuno_pasien', 'Imunohematologi – Golongan Darah Pasien', 'Pasien – Golongan AB Positif', angka(r[6]));
+        tambah('imuno_pasien', 'Imunohematologi – Golongan Darah Pasien', 'Pasien – Golongan AB Negatif', angka(r[7]));
+        tambah('imuno_pasien', 'Imunohematologi – Golongan Darah Pasien', 'Pasien – Golongan O Positif', angka(r[8]));
+        tambah('imuno_pasien', 'Imunohematologi – Golongan Darah Pasien', 'Pasien – Golongan O Negatif', angka(r[9]));
+      }
+
+      // Seksi 4: Crossmatch / Uji Silang Serasi
+      if (/Uji Silang Serasi/i.test(t1) && i > 35 && i < 50) {
+        tambah('imuno_crossmatch', 'Imunohematologi – Uji Silang Serasi (Crossmatch)', 'Kompatibel', angka(r[2]));
+        tambah('imuno_crossmatch', 'Imunohematologi – Uji Silang Serasi (Crossmatch)', 'Inkompatibel – Mayor Positif', angka(r[3]));
+        tambah('imuno_crossmatch', 'Imunohematologi – Uji Silang Serasi (Crossmatch)', 'Inkompatibel – Minor Positif', angka(r[4]));
+        tambah('imuno_crossmatch', 'Imunohematologi – Uji Silang Serasi (Crossmatch)', 'Inkompatibel – DCT Positif', angka(r[5]));
+        tambah('imuno_crossmatch', 'Imunohematologi – Uji Silang Serasi (Crossmatch)', 'Inkompatibel – Lain-lain', angka(r[6]));
+      }
+
+      // Seksi 5: Pemeriksaan Rujukan
+      if (i >= 50 && i <= 88) {
+        if (/Kesulitan Membaca Golongan Darah|Kasus Inkompatibiltas|Reaksi Transfusi|Pemeriksaan Phenotyping|Pemeriksaan Identifikasi Antibodi|Pemeriksaan Paternitas/i.test(t1)) {
+          const clean = t1.replace(/^[a-z0-9]+[.)]\s*/i, '').trim();
+          tambah('imuno_rujukan', 'Imunohematologi – Pemeriksaan Rujukan', `BDRS – ${clean}`, angka(r[3]));
+          tambah('imuno_rujukan', 'Imunohematologi – Pemeriksaan Rujukan', `RS – ${clean}`, angka(r[4]));
+          tambah('imuno_rujukan', 'Imunohematologi – Pemeriksaan Rujukan', `UDD PMI – ${clean}`, angka(r[5]));
+        }
+      }
+    }
+  }
+
+  // 2. Universal Scanner Fallback (jika format berbeda atau sheet baru)
+  if (!Object.keys(T).length) {
+    const reHeader = /^(no\.?|nomor|uraian|keterangan|nama|jenis|pemeriksaan|parameter|kegiatan|golongan|item|deskripsi|kategori|tipe|indikator|rs\b)/i;
+    let headerRow = -1, labelCol = 0;
+    const numericCols = [];
+
+    for (let i = 0; i < Math.min(v.length, 30); i++) {
+      const r = v[i];
+      for (let c = 0; c < Math.min(r.length, 8); c++) {
+        if (reHeader.test(teks(r[c]))) {
+          if (/^(no\.?|nomor)$/i.test(teks(r[c])) && c + 1 < r.length && teks(r[c + 1])) {
+            headerRow = i; labelCol = c + 1;
+          } else { headerRow = i; labelCol = c; }
+          break;
+        }
+      }
+      if (headerRow >= 0) {
         for (let c = labelCol + 1; c < r.length; c++) {
-          numericCols.push({ idx: c, label: teks(hr[c]) || `Kolom ${c + 1}` });
+          const ct = teks(r[c]);
+          if (ct && !/^(no\.?|nomor)$/i.test(ct)) numericCols.push({ idx: c, label: ct });
         }
         break;
       }
     }
-  }
 
-  const ABAIKAN = /^(laporan|pmi|unit\s*donor|rekapitulasi|tahun|mengetahui|kepala|penanggung|banda\s*aceh|ttd|tanggal|halaman)/i;
-  const SKIP_TOT = /^(jumlah|total)(\s+seluruhnya|\s+keseluruhan)?$/i;
-  let grup = '';
-  const mulai = Math.max(0, headerRow + 1);
-
-  for (let i = mulai; i < v.length; i++) {
-    const r = v[i];
-    let lbl = teks(r[labelCol >= 0 ? labelCol : 0]);
-    if (!lbl) lbl = teks(r[0]);
-    if (!lbl && r.length > 1) lbl = teks(r[1]);
-    if (!lbl) continue;
-    if (ABAIKAN.test(lbl) && !r.some((x) => adaAngka(x))) continue;
-    if (SKIP_TOT.test(lbl)) continue;
-
-    let punyaAngka = false;
-    for (let c = 0; c < r.length; c++) {
-      if (c !== labelCol && adaAngka(r[c])) { punyaAngka = true; break; }
-    }
-    if (!punyaAngka) { grup = lbl.replace(/^[a-z0-9]+[.)]\s*/i, '').trim(); continue; }
-
-    const bersih = lbl.replace(/^[-–•*]\s*/, '').replace(/^[a-z0-9]+[.)]\s*/i, '').trim();
-    const namaLengkap = grup && bersih && !bersih.toLowerCase().startsWith(grup.toLowerCase())
-      ? `${grup} – ${bersih}` : (bersih || lbl);
-
-    if (numericCols.length > 0) {
-      let idxTotal = -1;
-      numericCols.forEach((nc) => { if (/^(jumlah|total)\b/i.test(nc.label)) idxTotal = nc.idx; });
-      let val = idxTotal >= 0 ? angka(r[idxTotal])
-        : numericCols.length === 1 ? angka(r[numericCols[0].idx])
-        : numericCols.reduce((s, nc) => s + angka(r[nc.idx]), 0);
-      tambah('rekap_imuno', 'Imunohematologi (Total)', namaLengkap, val);
-      if (numericCols.length > 1) {
-        numericCols.forEach((nc) => {
-          if (nc.idx !== idxTotal) {
-            tambah('imuno_' + nc.label.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20),
-              'Imunohematologi – ' + nc.label, namaLengkap, angka(r[nc.idx]));
+    if (headerRow < 0) {
+      for (let i = 0; i < v.length; i++) {
+        const r = v[i];
+        const a = teks(r[0]), b = teks(r[1]);
+        let firstNum = -1;
+        for (let c = 1; c < r.length; c++) { if (adaAngka(r[c])) { firstNum = c; break; } }
+        if ((a || b) && firstNum > 0) {
+          labelCol = a && !adaAngka(r[0]) ? 0 : (b && !adaAngka(r[1]) ? 1 : 0);
+          headerRow = i - 1;
+          const hr = headerRow >= 0 ? (v[headerRow] || []) : [];
+          for (let c = labelCol + 1; c < r.length; c++) {
+            numericCols.push({ idx: c, label: teks(hr[c]) || `Kolom ${c + 1}` });
           }
-        });
+          break;
+        }
       }
-    } else {
+    }
+
+    const ABAIKAN = /^(laporan|pmi|unit\s*donor|rekapitulasi|tahun|mengetahui|kepala|penanggung|banda\s*aceh|ttd|tanggal|halaman)/i;
+    const SKIP_TOT = /^(jumlah|total)(\s+seluruhnya|\s+keseluruhan)?$/i;
+    let grup = '';
+    const mulai = Math.max(0, headerRow + 1);
+
+    for (let i = mulai; i < v.length; i++) {
+      const r = v[i];
+      let lbl = teks(r[labelCol >= 0 ? labelCol : 0]);
+      if (!lbl) lbl = teks(r[0]);
+      if (!lbl && r.length > 1) lbl = teks(r[1]);
+      if (!lbl) continue;
+      if (ABAIKAN.test(lbl) && !r.some((x) => adaAngka(x))) continue;
+      if (SKIP_TOT.test(lbl)) continue;
+
+      let punyaAngka = false;
       for (let c = 0; c < r.length; c++) {
-        if (c !== labelCol && adaAngka(r[c])) { tambah('rekap_imuno', 'Imunohematologi (Total)', namaLengkap, angka(r[c])); break; }
+        if (c !== labelCol && adaAngka(r[c])) { punyaAngka = true; break; }
+      }
+      if (!punyaAngka) { grup = lbl.replace(/^[a-z0-9]+[.)]\s*/i, '').trim(); continue; }
+
+      const bersih = lbl.replace(/^[-–•*]\s*/, '').replace(/^[a-z0-9]+[.)]\s*/i, '').trim();
+      const namaLengkap = grup && bersih && !bersih.toLowerCase().startsWith(grup.toLowerCase())
+        ? `${grup} – ${bersih}` : (bersih || lbl);
+
+      if (numericCols.length > 0) {
+        let idxTotal = -1;
+        numericCols.forEach((nc) => { if (/^(jumlah|total)\b/i.test(nc.label)) idxTotal = nc.idx; });
+        let val = idxTotal >= 0 ? angka(r[idxTotal])
+          : numericCols.length === 1 ? angka(r[numericCols[0].idx])
+          : numericCols.reduce((s, nc) => s + angka(r[nc.idx]), 0);
+        tambah('rekap_imuno', 'Imunohematologi (Total)', namaLengkap, val);
+        if (numericCols.length > 1) {
+          numericCols.forEach((nc) => {
+            if (nc.idx !== idxTotal) {
+              tambah('imuno_' + nc.label.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20),
+                'Imunohematologi – ' + nc.label, namaLengkap, angka(r[nc.idx]));
+            }
+          });
+        }
+      } else {
+        for (let c = 0; c < r.length; c++) {
+          if (c !== labelCol && adaAngka(r[c])) { tambah('rekap_imuno', 'Imunohematologi (Total)', namaLengkap, angka(r[c])); break; }
+        }
       }
     }
   }
 
-  // Fallback total: baca semua baris dengan angka
+  // 3. Fallback absolut jika masih belum ada
   if (!Object.keys(T).length) {
+    const ABAIKAN = /^(laporan|pmi|unit\s*donor|rekapitulasi|tahun|mengetahui|kepala|penanggung|banda\s*aceh|ttd|tanggal|halaman)/i;
     for (let i = 0; i < v.length; i++) {
       const r = v[i];
       const lbl = teks(r[0]) || teks(r[1]);

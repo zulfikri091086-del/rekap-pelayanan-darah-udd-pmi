@@ -6,23 +6,23 @@ const fmt = new Intl.NumberFormat('id-ID');
 export default function RekapTable({ tampilan, tahun, sembunyi, cari }) {
   const q = (cari || '').toLowerCase();
 
-  const rows = tampilan.baris.filter((b) => {
+  let rows = tampilan.baris.filter((b) => {
     if (q && !b.label.toLowerCase().includes(q)) return false;
     if (sembunyi && !b.bulan.some((v) => v !== null && v !== 0)) return false;
     return true;
   });
 
-  if (!rows.length) {
-    if (tampilan.baris.length > 0 && sembunyi) {
-      return (
-        <div className="state">
-          Semua baris saat ini bernilai 0 atau kosong.<br />
-          <small style={{ color: 'var(--ink-3)', marginTop: 6, display: 'inline-block' }}>
-            Hilangkan centang <strong>"Sembunyikan baris kosong"</strong> di atas untuk melihat seluruh tabel.
-          </small>
-        </div>
-      );
+  let isFallbackAllZero = false;
+  // Jika seluruh baris tersembunyi karena nilainya 0, tetap tampilkan agar pengguna melihat struktur tabelnya
+  if (!rows.length && tampilan.baris.length > 0 && sembunyi) {
+    const allFiltered = tampilan.baris.filter((b) => !q || b.label.toLowerCase().includes(q));
+    if (allFiltered.length > 0) {
+      rows = allFiltered;
+      isFallbackAllZero = true;
     }
+  }
+
+  if (!rows.length) {
     return <div className="state">Tidak ada baris yang cocok.</div>;
   }
 
@@ -52,34 +52,41 @@ export default function RekapTable({ tampilan, tahun, sembunyi, cari }) {
   }
 
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Uraian</th>
-          {BULAN.map((b) => <th key={b}>{b}</th>)}
-          <th className="tot">Total {tahun}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((b) => {
-          const parts = b.label.split(/ – | \| /);
-          const nama = parts.length > 1
-            ? <><span className="grp">{parts[0]}</span><span className="nm">{parts.slice(1).join(' – ')}</span></>
-            : <span className="nm">{b.label}</span>;
-          return (
-            <tr key={b.label}>
-              <td>{nama}</td>
-              {b.bulan.map((v, i) => <Cell key={i} v={v} />)}
-              <TotCell v={getTotal(b)} />
-            </tr>
-          );
-        })}
-        <tr className="sum">
-          <td>JUMLAH</td>
-          {jumlah.map((v, i) => <Cell key={i} v={v} />)}
-          <TotCell v={jumTotal} />
-        </tr>
-      </tbody>
-    </table>
+    <>
+      {isFallbackAllZero && (
+        <div style={{ padding: '8px 16px', background: 'var(--bg-2)', borderBottom: '1px solid var(--line-2)', fontSize: '12px', color: 'var(--ink-2)' }}>
+          ℹ Seluruh baris saat ini bernilai 0 atau belum ada data di spreadsheet. Menampilkan struktur tabel lengkap.
+        </div>
+      )}
+      <table>
+        <thead>
+          <tr>
+            <th>Uraian</th>
+            {BULAN.map((b) => <th key={b}>{b}</th>)}
+            <th className="tot">Total {tahun}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((b) => {
+            const parts = b.label.split(/ – | \| /);
+            const nama = parts.length > 1
+              ? <><span className="grp">{parts[0]}</span><span className="nm">{parts.slice(1).join(' – ')}</span></>
+              : <span className="nm">{b.label}</span>;
+            return (
+              <tr key={b.label}>
+                <td>{nama}</td>
+                {b.bulan.map((v, i) => <Cell key={i} v={v} />)}
+                <TotCell v={getTotal(b)} />
+              </tr>
+            );
+          })}
+          <tr className="sum">
+            <td>JUMLAH</td>
+            {jumlah.map((v, i) => <Cell key={i} v={v} />)}
+            <TotCell v={jumTotal} />
+          </tr>
+        </tbody>
+      </table>
+    </>
   );
 }

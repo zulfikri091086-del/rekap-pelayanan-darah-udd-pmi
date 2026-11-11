@@ -25,6 +25,14 @@ export default function Dashboard() {
   const [sembunyi, setSembunyi] = useState(false);
   const [cari, setCari] = useState('');
   const abortRef = useRef(null);
+  const scrollRef = useRef(null);
+
+  // Reset scroll horizontal ke awal setiap kali ganti tab atau jenis tampilan
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = 0;
+    }
+  }, [lapIdx, tampilanId, tahun]);
 
   // Load config dari localStorage
   useEffect(() => {
@@ -236,7 +244,7 @@ export default function Dashboard() {
                     </a>
                   )}
                 </div>
-                <div className="scroll">
+                <div className="scroll" ref={scrollRef}>
                   <RekapTable
                     tampilan={tampilanAktif}
                     tahun={tahun}
