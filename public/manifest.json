@@ -1,0 +1,26 @@
+{
+  "name": "Rekap Laporan UDD PMI",
+  "short_name": "Rekap UDD",
+  "description": "Dashboard Rekap Laporan Unit Donor Darah PMI Kota Banda Aceh",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f3ee",
+  "theme_color": "#b9747f",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["medical", "productivity"],
+  "lang": "id"
+}
