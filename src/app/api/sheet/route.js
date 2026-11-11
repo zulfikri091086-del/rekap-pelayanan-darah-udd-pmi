@@ -5,16 +5,57 @@
 
 export const runtime = 'edge'; // jalankan di Vercel Edge untuk latensi rendah
 
-const NAMA_IDN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-const NAMA_ENG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const SING_IDN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-const SING_ENG = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_MATCHERS = [
+  ['jan', 'januari', 'january', '1', '01'],
+  ['feb', 'februari', 'february', '2', '02'],
+  ['mar', 'maret', 'march', '3', '03'],
+  ['apr', 'april', '4', '04'],
+  ['mei', 'may', '5', '05'],
+  ['jun', 'juni', 'june', '6', '06'],
+  ['jul', 'juli', 'july', '7', '07'],
+  ['agu', 'agus', 'agustus', 'aug', 'august', '8', '08'],
+  ['sep', 'september', '9', '09'],
+  ['okt', 'oct', 'oktober', 'october', '10'],
+  ['nov', 'november', '11'],
+  ['des', 'dec', 'desember', 'december', '12'],
+];
 
-function namaCandidates(m) {
-  return [
-    String(m), (m < 10 ? '0' : '') + m, m + '.', 'Bulan ' + m,
-    NAMA_IDN[m - 1], NAMA_ENG[m - 1], SING_IDN[m - 1], SING_ENG[m - 1],
-  ];
+async function getSheetTabs(sheetId) {
+  try {
+    const res = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/edit`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const tabs = [];
+    const regex = /class="[^"]*docs-sheet-tab-caption[^"]*"[^>]*>([^<]+)<\/div>/g;
+    let m;
+    while ((m = regex.exec(html)) !== null) {
+      tabs.push(m[1].trim());
+    }
+    return tabs;
+  } catch {
+    return [];
+  }
+}
+
+function mapTabsToMonths(tabs) {
+  const result = {};
+  for (let m = 1; m <= 12; m++) {
+    const matchers = MONTH_MATCHERS[m - 1];
+    const found = tabs.find((t) => {
+      const lower = t.toLowerCase().trim();
+      return matchers.some((match) => lower === match || lower === `bulan ${match}` || lower.startsWith(match));
+    });
+    if (found) {
+      result[m] = found;
+    } else if (tabs[m - 1]) {
+      result[m] = tabs[m - 1];
+    } else {
+      result[m] = String(m);
+    }
+  }
+  return result;
 }
 
 function parseGviz(text) {
@@ -54,35 +95,41 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
   const tab = searchParams.get('tab');
-  const allBulan = searchParams.get('all') === '1'; // ?all=1 untuk fetch semua bulan sekaligus
+  const allBulan = searchParams.get('all') === '1';
 
   if (!id) {
     return Response.json({ error: 'Parameter id diperlukan' }, { status: 400 });
   }
 
-  // Validasi format ID (hanya alfanumerik, underscore, dash)
   if (!/^[a-zA-Z0-9_-]{20,}$/.test(id)) {
     return Response.json({ error: 'Format Sheet ID tidak valid' }, { status: 400 });
   }
 
   if (allBulan) {
-    // Fetch semua 12 bulan sekaligus
+    // 1. Dapatkan daftar nama tab asli dari dokumen
+    const realTabs = await getSheetTabs(id);
+    const tabMap = realTabs.length ? mapTabsToMonths(realTabs) : null;
+
+    // 2. Fetch ke-12 bulan langsung menggunakan nama tab aslinya
     const result = {};
     await Promise.all(
       Array.from({ length: 12 }, async (_, idx) => {
         const m = idx + 1;
-        for (const candidate of namaCandidates(m)) {
-          const data = await fetchTab(id, candidate);
-          if (data && data.length > 0) { result[m] = data; return; }
+        const targetTab = tabMap ? tabMap[m] : String(m);
+        if (targetTab) {
+          const data = await fetchTab(id, targetTab);
+          if (data && data.length > 0) {
+            result[m] = data;
+          }
         }
       })
     );
+
     return Response.json({ data: result }, {
       headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
     });
   }
 
-  // Fetch tab tertentu
   if (!tab) {
     return Response.json({ error: 'Parameter tab atau all=1 diperlukan' }, { status: 400 });
   }

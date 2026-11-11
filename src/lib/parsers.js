@@ -39,85 +39,56 @@ export function parsePelayanan(v, bulan, peringatan) {
     T[id].baris.push({ label, nilai });
   }
 
-  let headerRow = -1, labelCol = -1;
-  const numericCols = [];
+  let grup = 'Bagian di RS';
 
-  for (let i = 0; i < Math.min(v.length, 20); i++) {
+  for (let i = 0; i < v.length; i++) {
     const r = v[i];
-    for (let c = 0; c < Math.min(r.length, 5); c++) {
-      const t = teks(r[c]);
-      if (/^(uraian|keterangan|nama|jenis|kegiatan|parameter|indikator|rumah\s*sakit|rs\b|komponen)/i.test(t)) {
-        headerRow = i; labelCol = c; break;
-      }
+    const col0 = teks(r[0]);
+    const col1 = teks(r[1]);
+
+    // Abaikan header besar
+    if (/laporan distribusi|unit donor darah|tahun 20/i.test(col0) || /laporan distribusi/i.test(col1)) continue;
+    // Abaikan baris jumlah
+    if (/^jumlah$/i.test(col0) || /^jumlah$/i.test(col1)) continue;
+    // Abaikan baris label header kolom
+    if (/nama permintaan/i.test(col1) || /jumlah permintaan/i.test(col1) || /persentase/i.test(col1)) continue;
+    if (/jenis rs yang dilayani/i.test(col1)) {
+      grup = 'Berdasarkan Lokasi';
+      continue;
     }
-    if (headerRow >= 0) {
-      for (let c = labelCol + 1; c < r.length; c++) {
-        const ct = teks(r[c]);
-        if (ct && !/^(no\.?|nomor)$/i.test(ct)) numericCols.push({ idx: c, label: ct });
-      }
-      break;
-    }
-  }
+    if (col1 === '-' || col0 === '-') continue;
+    if (!col1 && !col0) continue;
 
-  if (headerRow < 0) {
-    for (let i = 0; i < v.length; i++) {
-      const r = v[i];
-      const a = teks(r[0]), b = teks(r[1]);
-      if ((a || b) && (adaAngka(r[2]) || adaAngka(r[3]) || adaAngka(r[4]) || adaAngka(r[5]))) {
-        labelCol = b ? 1 : 0;
-        headerRow = Math.max(0, i - 1);
-        const hr = v[headerRow] || [];
-        for (let c = labelCol + 1; c < r.length; c++) {
-          if (adaAngka(r[c])) numericCols.push({ idx: c, label: teks(hr[c]) || `Kolom ${c + 1}` });
-        }
-        break;
-      }
-    }
-  }
+    let label = col1 || col0;
+    label = label.replace(/^[0-9]+[.)]\s*/, '').replace(/^[a-z][.)]\s*/i, '').trim();
+    if (!label) continue;
 
-  let grup = '';
-  const mulai = Math.max(0, headerRow + 1);
+    // Tentukan pengelompokan baris
+    if (i >= 11 && i <= 14) grup = 'Berdasarkan Penyakit / Diagnosa';
+    else if (i >= 19 && i <= 24) grup = 'Berdasarkan Institusi';
+    else if (i >= 28) grup = 'Berdasarkan Lokasi';
+    else if (i < 8) grup = 'Bagian di RS';
 
-  for (let i = mulai; i < v.length; i++) {
-    const r = v[i];
-    let lbl = teks(r[labelCol >= 0 ? labelCol : 1]);
-    if (!lbl && labelCol !== 0) lbl = teks(r[0]);
-    if (!lbl) continue;
-    if (/^(laporan|pmi|unit donor|rekapitulasi|tahun|mengetahui|kepala|penanggung)/i.test(lbl) &&
-        !numericCols.some((nc) => adaAngka(r[nc.idx]))) continue;
-    if (/^(jumlah|total)(\s+seluruhnya)?$/i.test(lbl)) continue;
-
-    let punyaAngka = false;
-    for (let c = 0; c < r.length; c++) {
-      if (c !== labelCol && adaAngka(r[c])) { punyaAngka = true; break; }
-    }
-    if (!punyaAngka) { grup = lbl.replace(/^[a-z0-9]+[.)]\s*/i, '').trim(); continue; }
-
-    const bersih = lbl.replace(/^[-–•*]\s*/, '').replace(/^[a-z0-9]+[.)]\s*/i, '').trim();
-    const namaLengkap = grup && !bersih.toLowerCase().startsWith(grup.toLowerCase())
-      ? `${grup} – ${bersih}` : (bersih || lbl);
-
-    if (numericCols.length > 0) {
-      let idxTotal = -1;
-      numericCols.forEach((nc) => { if (/^(jumlah|total)\b/i.test(nc.label)) idxTotal = nc.idx; });
-      let val = idxTotal >= 0 ? angka(r[idxTotal])
-        : numericCols.length === 1 ? angka(r[numericCols[0].idx])
-        : numericCols.reduce((s, nc) => s + angka(r[nc.idx]), 0);
-      tambah('rekap_pelayanan', 'Rekap Distribusi Darah (Total)', namaLengkap, val);
-      if (numericCols.length > 1) {
-        numericCols.forEach((nc) => {
-          if (nc.idx !== idxTotal) {
-            tambah('pel_' + nc.label.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20),
-              'Distribusi – ' + nc.label, namaLengkap, angka(r[nc.idx]));
-          }
-        });
-      }
+    // Ambil nilai dari kolom pemenuhan (col 3), permintaan (col 2), atau angka pertama
+    let val = 0;
+    if (adaAngka(r[3])) {
+      val = angka(r[3]);
+    } else if (adaAngka(r[2])) {
+      val = angka(r[2]);
     } else {
-      for (let c = (labelCol >= 0 ? labelCol : 1) + 1; c < r.length; c++) {
-        if (adaAngka(r[c])) { tambah('rekap_pelayanan', 'Rekap Distribusi Darah', namaLengkap, angka(r[c])); break; }
+      for (let c = 2; c < r.length; c++) {
+        if (adaAngka(r[c])) { val = angka(r[c]); break; }
       }
     }
+
+    const fullLabel = grup ? `${grup} – ${label}` : label;
+    tambah('rekap_pelayanan', 'Rekap Distribusi Darah (Realisasi/Dipenuhi)', fullLabel, val);
+
+    if (adaAngka(r[2])) {
+      tambah('permintaan', 'Distribusi Darah – Permintaan', fullLabel, angka(r[2]));
+    }
   }
+
   return Object.values(T);
 }
 
